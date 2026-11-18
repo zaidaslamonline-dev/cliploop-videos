@@ -53,6 +53,77 @@ async def generate_tts_and_boundaries(raw_text: str, mp3_path: str, voice: str =
     return word_events
 
 
+def format_srt_time(seconds: float) -> str:
+    ms = max(int(round(seconds * 1000)), 0)
+    h, rem = divmod(ms, 3_600_000)
+    m, rem = divmod(rem, 60_000)
+    sec, milli = divmod(rem, 1000)
+    return f"{h:02d}:{m:02d}:{sec:02d},{milli:03d}"
+
+
+def build_srt_subtitles(raw_text: str, word_events: list, srt_path: str, total_duration: float):
+    words = re.findall(r"\\S+", raw_text)
+    if not word_events:
+        step = total_duration / max(len(words), 1)
+        word_events = [{"word": w, "start": i * step, "end": (i + 1) * step} for i, w in enumerate(words)]
+
+    n = min(len(words), len(word_events))
+    aligned = [
+        {"word": words[i], "start": word_events[i]["start"], "end": word_events[i]["end"]}
+        for i in range(n)
+    ]
+    if len(words) > n:
+        last_end = aligned[-1]["end"] if aligned else 0.0
+        remaining = words[n:]
+        step = max((total_duration - last_end) / len(remaining), 0.15)
+        for i, word in enumerate(remaining):
+            aligned.append({"word": word, "start": last_end + i * step, "end": last_end + (i + 1) * step})
+
+    cues = []
+    group_size = 5
+    for i in range(0, len(aligned), group_size):
+        group = aligned[i:i + group_size]
+        start = group[0]["start"]
+        end = max(group[-1]["end"], start + 0.25)
+        cues.extend([
+            str(len(cues) + 1),
+            f"{format_srt_time(start)} --> {format_srt_time(end)}",
+            " ".join(x["word"] for x in group),
+            ""
+        ])
+    Path(srt_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(srt_path).write_text("\\n".join(cues), encoding="utf-8")
+
+
+def read_srt_word_events(srt_path: str):
+    path = Path(srt_path)
+    if not path.exists():
+        return []
+    content = path.read_text(encoding="utf-8-sig").strip()
+    events = []
+    for block in re.split(r"\\n\\s*\\n", content):
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        timing = next((line for line in lines if "-->" in line), None)
+        if not timing:
+            continue
+        text_lines = lines[lines.index(timing) + 1:]
+        words = re.findall(r"\\S+", " ".join(text_lines))
+        try:
+            left, right = timing.split("-->")
+            def parse_time(value):
+                hh, mm, rest = value.strip().replace(",", ".").split(":")
+                return int(hh) * 3600 + int(mm) * 60 + float(rest)
+            start, end = parse_time(left), parse_time(right)
+        except (ValueError, IndexError):
+            continue
+        if not words:
+            continue
+        step = max((end - start) / len(words), 0.08)
+        for i, word in enumerate(words):
+            events.append({"word": word, "start": start + i * step, "end": start + (i + 1) * step})
+    return events
+
+
 def build_ass_subtitles(raw_text: str, word_events: list, ass_path: str, total_duration: float):
     display_words = re.findall(r"\S+", raw_text)
     if not word_events:
@@ -154,28 +225,47 @@ def render_episode(episode_dir: str, output_dir: str, voiceover_only: bool = Fal
     series_title = str(config.get("series", "SANATAN TIMELINE")).upper()
     badge_text = f"{series_title}  |  EPISODE {ep_num}"
 
-    raw_voice = str(work_dir / "voice_raw.mp3")
+    audio_dir = ep_path / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    approved_voiceover = audio_dir / "voiceover.mp3"
+    saved_srt = audio_dir / "captions.srt"
     clean_voice = str(work_dir / "voice_clean.wav")
-    word_events = asyncio.run(generate_tts_and_boundaries(raw_text, raw_voice, voice=config["voice"]))
 
-    subprocess.run([
-        "ffmpeg", "-y", "-i", raw_voice,
-        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-        clean_voice
-    ], check=True)
+    if approved_voiceover.exists():
+        print(f"Reusing saved voiceover: {approved_voiceover}")
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(approved_voiceover),
+            "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+            clean_voice
+        ], check=True)
+        word_events = read_srt_word_events(str(saved_srt))
+    else:
+        raw_voice = str(work_dir / "voice_raw.mp3")
+        word_events = asyncio.run(generate_tts_and_boundaries(raw_text, raw_voice, voice=config["voice"]))
+        subprocess.run([
+            "ffmpeg", "-y", "-i", raw_voice,
+            "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+            clean_voice
+        ], check=True)
+        duration_for_srt = get_audio_duration(clean_voice)
+        build_srt_subtitles(raw_text, word_events, str(saved_srt), duration_for_srt)
+        subprocess.run([
+            "ffmpeg", "-y", "-i", clean_voice,
+            "-codec:a", "libmp3lame", "-b:a", "192k", str(approved_voiceover)
+        ], check=True)
+        print(f"Generated and saved voiceover: {approved_voiceover}")
+        print(f"Generated and saved subtitles: {saved_srt}")
 
     duration = get_audio_duration(clean_voice) + 0.5
 
     if voiceover_only:
-        mp3_output = out_path / f"ep-{ep_num}-voiceover.mp3"
-        subprocess.run([
-            "ffmpeg", "-y", "-i", clean_voice,
-            "-codec:a", "libmp3lame", "-b:a", "192k", str(mp3_output)
-        ], check=True)
-        print(f"Successfully generated voiceover: {mp3_output}")
+        print(f"Voiceover asset ready: {approved_voiceover}")
+        print(f"Subtitle asset ready: {saved_srt}")
         return
 
     ass_path = str(work_dir / "subtitles.ass")
+    if not word_events:
+        word_events = read_srt_word_events(str(saved_srt))
     build_ass_subtitles(raw_text, word_events, ass_path, duration)
 
     img_patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp"]
