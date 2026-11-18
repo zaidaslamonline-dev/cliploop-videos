@@ -87,7 +87,7 @@ def build_srt_subtitles(raw_text: str, word_events: list, srt_path: str, total_d
         start = group[0]["start"]
         end = max(group[-1]["end"], start + 0.25)
         cues.extend([
-            str(len(cues) + 1),
+            str(i // group_size + 1),
             f"{format_srt_time(start)} --> {format_srt_time(end)}",
             " ".join(x["word"] for x in group),
             ""
