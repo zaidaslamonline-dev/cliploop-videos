@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import shutil
 from pathlib import Path
 import edge_tts
 
@@ -231,8 +232,8 @@ def render_episode(episode_dir: str, output_dir: str, voiceover_only: bool = Fal
     saved_srt = audio_dir / "captions.srt"
     clean_voice = str(work_dir / "voice_clean.wav")
 
-    if approved_voiceover.exists():
-        print(f"Reusing saved voiceover: {approved_voiceover}")
+    if approved_voiceover.exists() and config.get("voiceover_approved", False):
+        print(f"Reusing approved voiceover: {approved_voiceover}")
         subprocess.run([
             "ffmpeg", "-y", "-i", str(approved_voiceover),
             "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
@@ -261,8 +262,11 @@ def render_episode(episode_dir: str, output_dir: str, voiceover_only: bool = Fal
         build_srt_subtitles(raw_text, word_events, str(saved_srt), duration - 0.5)
 
     if voiceover_only:
+        preview_mp3 = out_path / f"ep-{ep_num}-voiceover.mp3"
+        shutil.copy2(approved_voiceover, preview_mp3)
         print(f"Voiceover asset ready: {approved_voiceover}")
         print(f"Subtitle asset ready: {saved_srt}")
+        print(f"Preview copy ready: {preview_mp3}")
         return
 
     ass_path = str(work_dir / "subtitles.ass")
