@@ -62,7 +62,7 @@ def format_srt_time(seconds: float) -> str:
 
 
 def build_srt_subtitles(raw_text: str, word_events: list, srt_path: str, total_duration: float):
-    words = re.findall(r"\\S+", raw_text)
+    words = re.findall(r"\S+", raw_text)
     if not word_events:
         step = total_duration / max(len(words), 1)
         word_events = [{"word": w, "start": i * step, "end": (i + 1) * step} for i, w in enumerate(words)]
@@ -92,7 +92,7 @@ def build_srt_subtitles(raw_text: str, word_events: list, srt_path: str, total_d
             ""
         ])
     Path(srt_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(srt_path).write_text("\\n".join(cues), encoding="utf-8")
+    Path(srt_path).write_text("\n".join(cues), encoding="utf-8")
 
 
 def read_srt_word_events(srt_path: str):
@@ -101,13 +101,13 @@ def read_srt_word_events(srt_path: str):
         return []
     content = path.read_text(encoding="utf-8-sig").strip()
     events = []
-    for block in re.split(r"\\n\\s*\\n", content):
+    for block in re.split(r"\n\s*\n", content):
         lines = [line.strip() for line in block.splitlines() if line.strip()]
         timing = next((line for line in lines if "-->" in line), None)
         if not timing:
             continue
         text_lines = lines[lines.index(timing) + 1:]
-        words = re.findall(r"\\S+", " ".join(text_lines))
+        words = re.findall(r"\S+", " ".join(text_lines))
         try:
             left, right = timing.split("-->")
             def parse_time(value):
