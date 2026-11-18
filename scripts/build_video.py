@@ -271,7 +271,7 @@ def render_episode(episode_dir: str, output_dir: str):
             a_inputs.append(f"[whoosh{i}]")
 
     if len(a_inputs) > 1:
-        a_chain += f"{''.join(a_inputs)}amix=inputs={len(a_inputs)}:duration=first:dropout_transition=2[aout]"
+        a_chain += f"{''.join(a_inputs)}amix=inputs={len(a_inputs)}:duration=first:dropout_transition=2:normalize=0,alimiter=limit=0.95[aout]"
     else:
         a_chain += "[1:a]anull[aout]"
 
