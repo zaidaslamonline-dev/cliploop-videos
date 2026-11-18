@@ -53,6 +53,12 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Restore reusable media bundle
+        run: |
+          if [ -f sanatan-reel-media-bundle.zip ]; then
+            unzip -o sanatan-reel-media-bundle.zip -d .
+          fi
+
       - name: Render 9:16 Reel
         run: |
           python scripts/build_video.py --episode "${{ steps.detect.outputs.episode }}" --output "dist"
