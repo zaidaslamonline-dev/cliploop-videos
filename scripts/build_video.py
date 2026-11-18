@@ -209,10 +209,12 @@ def render_episode(episode_dir: str, output_dir: str):
     bgm_path = Path("assets/bgm/bgm_main.mp3")
     particles_path = Path("assets/overlays/particles_overlay.mp4")
     bass_path = Path("assets/sfx/bass_hit.mp3")
+    whoosh_path = Path("assets/sfx/whoosh.mp3")
 
     has_bgm = bgm_path.exists()
     has_particles = particles_path.exists()
     has_bass = bass_path.exists()
+    has_whoosh = whoosh_path.exists()
 
     next_idx = 2
     if has_particles:
@@ -226,6 +228,10 @@ def render_episode(episode_dir: str, output_dir: str):
     if has_bass:
         inputs.extend(["-i", str(bass_path)])
         bass_idx = next_idx
+        next_idx += 1
+    if has_whoosh and len(images) > 1:
+        inputs.extend(["-i", str(whoosh_path)])
+        whoosh_idx = next_idx
         next_idx += 1
 
     escaped_ass = ass_path.replace("\\", "/").replace(":", "\\:")
@@ -255,6 +261,14 @@ def render_episode(episode_dir: str, output_dir: str):
     if has_bass:
         a_chain += f"[{bass_idx}:a]volume=0.45[bass];"
         a_inputs.append("[bass]")
+    if has_whoosh and len(images) > 1:
+        transition_count = len(images) - 1
+        split_labels = "".join(f"[whsrc{i}]" for i in range(transition_count))
+        a_chain += f"[{whoosh_idx}:a]asplit={transition_count}{split_labels};"
+        for i in range(transition_count):
+            delay_ms = int(round(scene_dur * (i + 1) * 1000))
+            a_chain += f"[whsrc{i}]adelay={delay_ms}|{delay_ms},volume=0.24[whoosh{i}];"
+            a_inputs.append(f"[whoosh{i}]")
 
     if len(a_inputs) > 1:
         a_chain += f"{''.join(a_inputs)}amix=inputs={len(a_inputs)}:duration=first:dropout_transition=2[aout]"
