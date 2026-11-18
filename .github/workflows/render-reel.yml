@@ -16,6 +16,8 @@ permissions:
 
 jobs:
   render:
+    # Ignore the initial directory placeholder; render only real episode commits.
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'episodes/.gitkeep')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
