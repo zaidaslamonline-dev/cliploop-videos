@@ -3,5 +3,6 @@
   "series": "SANATAN TIMELINE",
   "voice": "hi-IN-MadhurNeural",
   "voiceover_only": true,
-  "voiceover_approved": false
+  "voiceover_approved": false,
+  "voiceover_status": "pending_review"
 }
