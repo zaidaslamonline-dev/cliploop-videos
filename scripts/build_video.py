@@ -257,6 +257,8 @@ def render_episode(episode_dir: str, output_dir: str, voiceover_only: bool = Fal
         print(f"Generated and saved subtitles: {saved_srt}")
 
     duration = get_audio_duration(clean_voice) + 0.5
+    if not saved_srt.exists():
+        build_srt_subtitles(raw_text, word_events, str(saved_srt), duration - 0.5)
 
     if voiceover_only:
         print(f"Voiceover asset ready: {approved_voiceover}")
