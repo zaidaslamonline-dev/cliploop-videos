@@ -1,0 +1,65 @@
+name: Auto-Render Sanatan Reel
+
+on:
+  push:
+    paths:
+      - 'episodes/**'
+  workflow_dispatch:
+    inputs:
+      episode_id:
+        description: 'Episode folder name (e.g. ep-01)'
+        required: true
+        default: 'ep-01'
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed episode
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            EP="${{ github.event.inputs.episode_id }}"
+          else
+            EP=$(git diff --name-only HEAD~1 HEAD | grep '^episodes/' | cut -d'/' -f2 | head -n 1)
+          fi
+          if [ -z "$EP" ]; then
+            EP=$(ls -1 episodes | grep '^ep-' | sort | tail -n 1)
+          fi
+          echo "episode=$EP" >> $GITHUB_OUTPUT
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Render 9:16 Reel
+        run: |
+          python scripts/build_video.py --episode "${{ steps.detect.outputs.episode }}" --output "dist"
+
+      - name: Publish Direct Download Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ steps.detect.outputs.episode }}-release"
+          name: "${{ steps.detect.outputs.episode }} - Ready to Publish"
+          body: "Automated 1080x1920 vertical render ready for Instagram Reels, YouTube Shorts, and Facebook."
+          files: |
+            dist/${{ steps.detect.outputs.episode }}-final.mp4
