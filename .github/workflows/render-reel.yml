@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'episodes/**'
+    paths-ignore:
+      - 'episodes/**/audio/**'
   workflow_dispatch:
     inputs:
       episode_id:
