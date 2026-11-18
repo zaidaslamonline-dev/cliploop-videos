@@ -132,7 +132,7 @@ def get_audio_duration(path: str) -> float:
     return float(out)
 
 
-def render_episode(episode_dir: str, output_dir: str):
+def render_episode(episode_dir: str, output_dir: str, voiceover_only: bool = False):
     ep_path = Path(episode_dir)
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -165,6 +165,15 @@ def render_episode(episode_dir: str, output_dir: str):
     ], check=True)
 
     duration = get_audio_duration(clean_voice) + 0.5
+
+    if voiceover_only:
+        mp3_output = out_path / f"ep-{ep_num}-voiceover.mp3"
+        subprocess.run([
+            "ffmpeg", "-y", "-i", clean_voice,
+            "-codec:a", "libmp3lame", "-b:a", "192k", str(mp3_output)
+        ], check=True)
+        print(f"Successfully generated voiceover: {mp3_output}")
+        return
 
     ass_path = str(work_dir / "subtitles.ass")
     build_ass_subtitles(raw_text, word_events, ass_path, duration)
@@ -293,5 +302,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode", required=True, help="Episode directory name e.g. ep-01")
     parser.add_argument("--output", default="dist", help="Output directory")
+    parser.add_argument("--voiceover-only", action="store_true", help="Generate and export narration MP3 without requiring images")
     args = parser.parse_args()
-    render_episode(os.path.join("episodes", args.episode), args.output)
+    render_episode(os.path.join("episodes", args.episode), args.output, voiceover_only=args.voiceover_only)
