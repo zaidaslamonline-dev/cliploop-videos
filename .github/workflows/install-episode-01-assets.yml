@@ -29,6 +29,9 @@ jobs:
           mkdir -p /tmp/episode-01-extracted
           unzip -q /tmp/episode-01-final-upload-bundle.zip -d /tmp/episode-01-extracted
 
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Install approved WAV, exact SRT, and 15 approved scenes
         run: |
           ROOT=/tmp/episode-01-extracted/episode-01-final-upload-bundle
