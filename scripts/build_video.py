@@ -196,8 +196,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 
+
 def build_ass_from_srt(srt_path: str, ass_path: str):
-    """Convert the approved SRT cues to ASS without changing cue text or timing."""
+    """Convert approved SRT cues to ASS while preserving cue text and timing."""
     content = Path(srt_path).read_text(encoding="utf-8-sig")
     header = """[Script Info]
 ScriptType: v4.00+
@@ -214,9 +215,9 @@ Style: Default,DejaVu Sans,66,&H00FFFFFF,&H0000D7FF,&H00000000,&H80000000,-1,0,0
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     def ass_escape(value: str) -> str:
-        return value.replace("\\", r"\\").replace("{", r"\\{").replace("}", r"\\}").replace("\\n", r"\\N")
+        return value.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
     lines = [header]
-    for block in re.split(r"\\n\\s*\\n", content.strip()):
+    for block in re.split(r"\n\s*\n", content.strip()):
         rows = [row.strip() for row in block.splitlines() if row.strip()]
         timing = next((row for row in rows if "-->" in row), None)
         if not timing:
@@ -226,8 +227,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             hh, mm, ss = stamp.strip().replace(",", ".").split(":")
             return int(hh) * 3600 + int(mm) * 60 + float(ss)
         start, end = parse_stamp(left), parse_stamp(right)
-        cue_text = r"\\N".join(ass_escape(row) for row in rows[rows.index(timing) + 1:])
-        lines.append(f"Dialogue: 0,{format_ass_time(start)},{format_ass_time(end)},Default,,0,0,0,,{cue_text}\\n")
+        cue_text = r"\N".join(ass_escape(row) for row in rows[rows.index(timing) + 1:])
+        lines.append(f"Dialogue: 0,{format_ass_time(start)},{format_ass_time(end)},Default,,0,0,0,,{cue_text}\n")
     Path(ass_path).write_text("".join(lines), encoding="utf-8")
 
 def get_audio_duration(path: str) -> float:
