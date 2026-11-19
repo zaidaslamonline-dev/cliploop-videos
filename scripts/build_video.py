@@ -195,6 +195,41 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.writelines(lines)
 
 
+
+def build_ass_from_srt(srt_path: str, ass_path: str):
+    """Convert the approved SRT cues to ASS without changing cue text or timing."""
+    content = Path(srt_path).read_text(encoding="utf-8-sig")
+    header = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,DejaVu Sans,66,&H00FFFFFF,&H0000D7FF,&H00000000,&H80000000,-1,0,0,0,100,100,1,0,1,4,2,2,80,80,610,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    def ass_escape(value: str) -> str:
+        return value.replace("\\", r"\\").replace("{", r"\\{").replace("}", r"\\}").replace("\\n", r"\\N")
+    lines = [header]
+    for block in re.split(r"\\n\\s*\\n", content.strip()):
+        rows = [row.strip() for row in block.splitlines() if row.strip()]
+        timing = next((row for row in rows if "-->" in row), None)
+        if not timing:
+            continue
+        left, right = timing.split("-->", 1)
+        def parse_stamp(stamp):
+            hh, mm, ss = stamp.strip().replace(",", ".").split(":")
+            return int(hh) * 3600 + int(mm) * 60 + float(ss)
+        start, end = parse_stamp(left), parse_stamp(right)
+        cue_text = r"\\N".join(ass_escape(row) for row in rows[rows.index(timing) + 1:])
+        lines.append(f"Dialogue: 0,{format_ass_time(start)},{format_ass_time(end)},Default,,0,0,0,,{cue_text}\\n")
+    Path(ass_path).write_text("".join(lines), encoding="utf-8")
+
 def get_audio_duration(path: str) -> float:
     cmd = [
         "ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -272,7 +307,7 @@ def render_episode(episode_dir: str, output_dir: str, voiceover_only: bool = Fal
     ass_path = str(work_dir / "subtitles.ass")
     if not word_events:
         word_events = read_srt_word_events(str(saved_srt))
-    build_ass_subtitles(raw_text, word_events, ass_path, duration)
+    build_ass_from_srt(str(saved_srt), ass_path)
 
     img_patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp"]
     images = []
